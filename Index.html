@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gerador Minecraft - MCPack / UUID</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: Arial, sans-serif;
+    background: #1e1e1e;
+    color: #eee;
+    margin: 0;
+    padding: 20px;
+  }
+  .container {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  h1, h2 { color: #7CFC00; }
+  .page { display: none; }
+  .page.active { display: block; }
+  button, .btn {
+    background: #3a7d3a;
+    color: white;
+    border: none;
+    padding: 12px 18px;
+    margin: 6px 0;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    width: 100%;
+    display: block;
+  }
+  button:hover { background: #4c9e4c; }
+  .voltar {
+    background: #555;
+    max-width: 150px;
+  }
+  .voltar:hover { background: #777; }
+  label { display: block; margin-top: 12px; font-weight: bold; }
+  input[type=text], input[type=number], textarea {
+    width: 100%;
+    padding: 8px;
+    margin-top: 4px;
+    border-radius: 4px;
+    border: 1px solid #444;
+    background: #2b2b2b;
+    color: #fff;
+  }
+  textarea { min-height: 70px; resize: vertical; }
+  .box {
+    background: #2a2a2a;
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 15px;
+  }
+  .uuid-line {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 8px;
+  }
+  .uuid-line input { flex: 1; }
+  .uuid-line button { width: auto; }
+  #codigoManifest {
+    width: 100%;
+    min-height: 300px;
+    background: #111;
+    color: #0f0;
+    font-family: monospace;
+    font-size: 12px;
+    padding: 10px;
+    border-radius: 6px;
+  }
+  .hint { font-size: 12px; color: #aaa; margin-top: 4px; }
+  .msg { color: #7CFC00; font-weight: bold; margin-top: 10px; }
+  .msg.erro { color: #ff6b6b; }
+
+  .subpack-item {
+    background: #222;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 10px;
+    margin-top: 10px;
+    position: relative;
+  }
+  .subpack-item label { margin-top: 6px; font-size: 13px; }
+  .subpack-remover {
+    background: #a33;
+    width: auto;
+    padding: 4px 10px;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+  .subpack-remover:hover { background: #c44; }
+  .add-subpack {
+    background: #2a5a8a;
+  }
+  .add-subpack:hover { background: #3a72ad; }
+  .subpacks-lista { margin-top: 10px; }
+
+  .dropzone {
+    margin-top: 6px;
+    border: 2px dashed #666;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    color: #aaa;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .dropzone.dragover {
+    background: #2a3a2a;
+    border-color: #7CFC00;
+    color: #dfd;
+  }
+  .dropzone img {
+    max-width: 100%;
+    max-height: 150px;
+    border-radius: 6px;
+    margin-top: 8px;
+  }
+  .dropzone .nome-arquivo {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #7CFC00;
+    word-break: break-all;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- PÁGINA 1: MENU -->
+  <div id="pagina-menu" class="page active">
+    <h1>O que você quer fazer?</h1>
+    <button onclick="irPara('pagina-mcpackfull')">Gerar um MCPack</button>
+    <button onclick="irPara('pagina-uuid')">Gerar UUID e Manifest</button>
+  </div>
+
+  <!-- PÁGINA 2: MCPACK COMPLETO (manifest + textura, zipado) -->
+  <div id="pagina-mcpackfull" class="page">
+    <button class="voltar" onclick="irPara('pagina-menu')">← Voltar</button>
+    <h2>Gerar um MCPack</h2>
+
+    <label>Nome do pacote</label>
+    <input type="text" id="mp_nome" placeholder="Meu Pack Incrível">
+
+    <label>Descrição</label>
+    <textarea id="mp_desc" placeholder="Descrição que aparece na textura"></textarea>
+
+    <div class="box">
+      <label style="margin-top:0;">Subpacks (máx. 75)</label>
+      <div class="hint">Cada subpack tem um nome de pasta (usado nos arquivos) e um nome que aparece no jogo.</div>
+      <div class="subpacks-lista" id="mp_subpacks_lista"></div>
+      <button type="button" class="add-subpack" onclick="adicionarSubpack('mp')">+ Adicionar subpack</button>
+      <div class="msg erro" id="mp_subpack_msg"></div>
+    </div>
+
+    <label>Imagem do pacote (pack_icon.png)</label>
+    <div class="dropzone" id="mp_dropzone" onclick="document.getElementById('mp_img').click()">
+      <div id="mp_dropzone_texto">Arraste a imagem até aqui, ou clique para escolher</div>
+      <img id="mp_preview" style="display:none;">
+      <div class="nome-arquivo" id="mp_nome_arquivo"></div>
+    </div>
+    <input type="file" id="mp_img" accept="image/*" style="display:none;">
+    <div class="hint">Se não escolher imagem, será gerado sem ícone.</div>
+
+    <button onclick="gerarMcpack()">Baixar .mcpack</button>
+    <div class="msg" id="mp_msg"></div>
+  </div>
+
+  <!-- PÁGINA 3: UID + MANIFEST -->
+  <div id="pagina-uuid" class="page">
+    <button class="voltar" onclick="irPara('pagina-menu')">← Voltar</button>
+    <h2>Gerador de UID e Manifest</h2>
+
+    <button onclick="gerarUUID()">Gerar UID</button>
+    <div class="uuid-line">
+      <input type="text" id="uuidGerado" readonly placeholder="Clique em Gerar UID">
+      <button onclick="copiarUUID()">Copiar</button>
+    </div>
+
+    <div class="box">
+      <h2>Gerar Manifest</h2>
+
+      <label>Nome do pacote</label>
+      <input type="text" id="u_nome" placeholder="Meu Pack">
+
+      <label>Descrição</label>
+      <textarea id="u_desc" placeholder="Descrição do pacote"></textarea>
+
+      <div class="box">
+        <label style="margin-top:0;">Subpacks (máx. 75)</label>
+        <div class="hint">Cada subpack tem um nome de pasta (usado nos arquivos) e um nome que aparece no jogo.</div>
+        <div class="subpacks-lista" id="u_subpacks_lista"></div>
+        <button type="button" class="add-subpack" onclick="adicionarSubpack('u')">+ Adicionar subpack</button>
+        <div class="msg erro" id="u_subpack_msg"></div>
+      </div>
+
+      <button onclick="baixarManifestUUID()">Baixar manifest.json</button>
+      <button onclick="copiarManifestUUID()">Copiar código do manifest</button>
+      <div class="msg" id="u_msg"></div>
+    </div>
+
+    <div class="box">
+      <label>Código gerado:</label>
+      <textarea id="codigoManifest" readonly></textarea>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function irPara(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// Gera um UUID v4 válido
+function gerarUUIDv4() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+const LIMITE_SUBPACKS = 75;
+let contadorSubpack = 0;
+
+// Cria um bloco de subpack (pasta + nome no jogo) num dos dois formulários ('mp' ou 'u')
+function adicionarSubpack(prefixo) {
+  const lista = document.getElementById(prefixo + '_subpacks_lista');
+  const msgEl = document.getElementById(prefixo + '_subpack_msg');
+  const atuais = lista.querySelectorAll('.subpack-item').length;
+
+  if (atuais >= LIMITE_SUBPACKS) {
+    msgEl.innerText = "Limite máximo de " + LIMITE_SUBPACKS + " subpacks atingido.";
+    return;
+  }
+  msgEl.innerText = "";
+
+  contadorSubpack++;
+  const id = prefixo + '_sp_' + contadorSubpack;
+
+  const div = document.createElement('div');
+  div.className = 'subpack-item';
+  div.id = id;
+  div.innerHTML =
+    '<label>Nome da pasta (folder_name)</label>' +
+    '<input type="text" class="sp-folder" placeholder="ex: 16x">' +
+    '<label>Nome que aparece no jogo</label>' +
+    '<input type="text" class="sp-nome" placeholder="ex: Textura 16x">' +
+    '<button type="button" class="subpack-remover" onclick="removerSubpack(\'' + prefixo + '\',\'' + id + '\')">Remover</button>';
+
+  lista.appendChild(div);
+
+  // Se for o formulário de UID/Manifest, liga os novos campos para atualizar o código ao vivo
+  if (prefixo === 'u') {
+    div.querySelector('.sp-folder').addEventListener('input', atualizarCodigoManifest);
+    div.querySelector('.sp-nome').addEventListener('input', atualizarCodigoManifest);
+    atualizarCodigoManifest();
+  }
+}
+
+function removerSubpack(prefixo, id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+  document.getElementById(prefixo + '_subpack_msg').innerText = "";
+  if (prefixo === 'u') {
+    atualizarCodigoManifest();
+  }
+}
+
+// Lê os subpacks preenchidos num dos dois formulários
+function lerSubpacks(prefixo) {
+  const lista = document.getElementById(prefixo + '_subpacks_lista');
+  const itens = lista.querySelectorAll('.subpack-item');
+  const resultado = [];
+  itens.forEach(function(item, index) {
+    const pasta = item.querySelector('.sp-folder').value.trim() || ('subpack_' + (index + 1));
+    const nome = item.querySelector('.sp-nome').value.trim() || ('Subpack ' + (index + 1));
+    resultado.push({ folder_name: pasta, name: nome });
+  });
+  return resultado.slice(0, LIMITE_SUBPACKS);
+}
+
+// Monta o manifest, sempre como resource pack, com a lista de subpacks informada
+function montarManifest(nome, desc, subpacks) {
+  const headerUUID = gerarUUIDv4();
+  const moduleUUID = gerarUUIDv4();
+
+  const manifest = {
+    format_version: 2,
+    header: {
+      name: nome || "Pacote sem nome",
+      description: desc || "",
+      uuid: headerUUID,
+      version: [1, 0, 0],
+      min_engine_version: [1, 20, 0]
+    },
+    modules: [
+      {
+        type: "resources",
+        uuid: moduleUUID,
+        version: [1, 0, 0]
+      }
+    ]
+  };
+
+  if (subpacks && subpacks.length > 0) {
+    manifest.subpacks = subpacks.map(function(sp) {
+      return {
+        folder_name: sp.folder_name,
+        name: sp.name,
+        memory_tier: 1
+      };
+    });
+  }
+
+  return manifest;
+}
+
+function baixarJSON(objeto, nomeArquivo) {
+  const texto = JSON.stringify(objeto, null, 4);
+  const blob = new Blob([texto], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nomeArquivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Função de copiar robusta: tenta a Clipboard API moderna, e se falhar (ex: contexto não seguro,
+// arquivo aberto direto no navegador via file://), usa o método antigo com textarea + execCommand.
+function copiarTexto(texto, aoTerminar) {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(texto).then(function() {
+      aoTerminar(true);
+    }).catch(function() {
+      copiarTextoFallback(texto, aoTerminar);
+    });
+  } else {
+    copiarTextoFallback(texto, aoTerminar);
+  }
+}
+
+function copiarTextoFallback(texto, aoTerminar) {
+  try {
+    const area = document.createElement('textarea');
+    area.value = texto;
+    area.style.position = 'fixed';
+    area.style.left = '-9999px';
+    area.style.top = '0';
+    document.body.appendChild(area);
+    area.focus();
+    area.select();
+    const sucesso = document.execCommand('copy');
+    document.body.removeChild(area);
+    aoTerminar(sucesso);
+  } catch (e) {
+    aoTerminar(false);
+  }
+}
+
+/* ---------- DRAG AND DROP DA IMAGEM (MCPack) ---------- */
+const mp_dropzone = document.getElementById('mp_dropzone');
+const mp_img_input = document.getElementById('mp_img');
+const mp_preview = document.getElementById('mp_preview');
+const mp_dropzone_texto = document.getElementById('mp_dropzone_texto');
+const mp_nome_arquivo = document.getElementById('mp_nome_arquivo');
+
+function mostrarPreviewImagem(arquivo) {
+  if (!arquivo || !arquivo.type.startsWith('image/')) return;
+  const leitor = new FileReader();
+  leitor.onload = function(e) {
+    mp_preview.src = e.target.result;
+    mp_preview.style.display = 'block';
+    mp_dropzone_texto.innerText = "Imagem selecionada:";
+    mp_nome_arquivo.innerText = arquivo.name;
+  };
+  leitor.readAsDataURL(arquivo);
+}
+
+// Clique na dropzone abre o seletor de arquivo (já ligado no onclick do próprio elemento no HTML)
+mp_img_input.addEventListener('change', function() {
+  if (mp_img_input.files && mp_img_input.files[0]) {
+    mostrarPreviewImagem(mp_img_input.files[0]);
+  }
+});
+
+mp_dropzone.addEventListener('dragover', function(e) {
+  e.preventDefault();
+  mp_dropzone.classList.add('dragover');
+});
+
+mp_dropzone.addEventListener('dragleave', function() {
+  mp_dropzone.classList.remove('dragover');
+});
+
+mp_dropzone.addEventListener('drop', function(e) {
+  e.preventDefault();
+  mp_dropzone.classList.remove('dragover');
+  const arquivos = e.dataTransfer.files;
+  if (arquivos && arquivos[0]) {
+    mp_img_input.files = arquivos;
+    mostrarPreviewImagem(arquivos[0]);
+  }
+});
+
+/* ---------- PÁGINA: MCPACK COMPLETO ---------- */
+async function gerarMcpack() {
+  const nome = document.getElementById('mp_nome').value || "Pacote";
+  const desc = document.getElementById('mp_desc').value;
+  const subpacks = lerSubpacks('mp');
+  const imgInput = document.getElementById('mp_img');
+
+  const manifest = montarManifest(nome, desc, subpacks);
+  const manifestTexto = JSON.stringify(manifest, null, 4);
+
+  const zip = new JSZip();
+  zip.file("manifest.json", manifestTexto);
+
+  if (imgInput.files && imgInput.files[0]) {
+    const arquivo = imgInput.files[0];
+    const dados = await arquivo.arrayBuffer();
+    zip.file("pack_icon.png", dados);
+  }
+
+  const conteudo = await zip.generateAsync({ type: "blob" });
+  const url = URL.createObjectURL(conteudo);
+  const a = document.createElement('a');
+  const nomeArquivo = nome.replace(/[^a-z0-9]/gi, '_').toLowerCase() || "pacote";
+  a.href = url;
+  a.download = nomeArquivo + ".mcpack";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  document.getElementById('mp_msg').innerText = "MCPack gerado e baixado!";
+}
+
+/* ---------- PÁGINA: UID + MANIFEST ---------- */
+function gerarUUID() {
+  const uuid = gerarUUIDv4();
+  document.getElementById('uuidGerado').value = uuid;
+}
+
+function copiarUUID() {
+  const campo = document.getElementById('uuidGerado');
+  if (!campo.value) return;
+  copiarTexto(campo.value, function(sucesso) {
+    // feedback visual rápido no próprio botão não é necessário, mas podemos usar u_msg se existir
+  });
+}
+
+// Recalcula e mostra o código do manifest na caixa, sempre que algo mudar.
+// Mantém o mesmo header.uuid e module.uuid entre atualizações (não gera um novo UID a cada letra digitada).
+let u_manifestCache = null;
+
+function atualizarCodigoManifest() {
+  const nome = document.getElementById('u_nome').value;
+  const desc = document.getElementById('u_desc').value;
+  const subpacks = lerSubpacks('u');
+
+  if (!u_manifestCache) {
+    u_manifestCache = montarManifest(nome, desc, subpacks);
+  } else {
+    u_manifestCache.header.name = nome || "Pacote sem nome";
+    u_manifestCache.header.description = desc || "";
+    if (subpacks && subpacks.length > 0) {
+      u_manifestCache.subpacks = subpacks.map(function(sp) {
+        return { folder_name: sp.folder_name, name: sp.name, memory_tier: 1 };
+      });
+    } else {
+      delete u_manifestCache.subpacks;
+    }
+  }
+
+  const texto = JSON.stringify(u_manifestCache, null, 4);
+  document.getElementById('codigoManifest').value = texto;
+  return u_manifestCache;
+}
+
+function baixarManifestUUID() {
+  const manifest = atualizarCodigoManifest();
+  baixarJSON(manifest, 'manifest.json');
+  document.getElementById('u_msg').innerText = "Manifest baixado!";
+}
+
+function copiarManifestUUID() {
+  const manifest = atualizarCodigoManifest();
+  const texto = JSON.stringify(manifest, null, 4);
+
+  const msgEl = document.getElementById('u_msg');
+  copiarTexto(texto, function(sucesso) {
+    if (sucesso) {
+      msgEl.classList.remove('erro');
+      msgEl.innerText = "Código copiado!";
+    } else {
+      msgEl.classList.add('erro');
+      msgEl.innerText = "Não foi possível copiar automaticamente. Selecione o texto na caixa abaixo e copie manualmente.";
+    }
+  });
+}
+
+// Liga os campos de nome e descrição para atualizar o código ao vivo
+document.getElementById('u_nome').addEventListener('input', atualizarCodigoManifest);
+document.getElementById('u_desc').addEventListener('input', atualizarCodigoManifest);
+
+// Gera o código inicial assim que a página carrega
+atualizarCodigoManifest();
+</script>
+</body>
+</html>
